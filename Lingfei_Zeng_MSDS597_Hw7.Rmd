@@ -1,0 +1,114 @@
+---
+title: "Lingfei_Zeng_MSDS597_Hw7"
+author: "Lingfei Zeng"
+date: "November 3, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(stringr)
+library(Lahman)
+library(dplyr)
+library(plyr)
+library(tidyverse)
+library(choroplethr)
+library(choroplethrMaps)
+
+
+
+library(dplyr)
+xmart<-read.csv("./xmart.csv")
+xmart_1<-as.data.frame(xmart)
+# clean data:
+xmart_1$Maternal.mortality.ratio..per.100.000.live.births.<-str_replace_all(xmart$Maternal.mortality.ratio..per.100.000.live.births., " ", "")
+df<-data.frame(ldply(strsplit(xmart_1$Maternal.mortality.ratio..per.100.000.live.births., "\\["), rbind))
+
+xmart_2<-data.frame(cbind(xmart_1, df))
+
+df1<-ldply(str_split(xmart_2$X2, "-"), rbind)
+
+xmart_3<-data.frame(cbind(xmart_2, df1))
+
+xmart_3$Maternal.mortality.ratio..per.100.000.live.births.<-NULL
+xmart_3$X2<-NULL
+xmart_4<-rename(xmart_3, c("X1"="maternal_mortality", "X1.1"="lower_bound", "X2.1"="upper_bound"))
+xmart_4$upper_bound<-str_replace_all(xmart_4$upper_bound, "\\]", "")
+# this is the cleaned data frame.
+
+
+
+
+
+
+WHS9<-read_csv("./WHS9_93.csv")
+WHS9<-as.data.frame(WHS9)
+colnames(WHS9) <- WHS9[1,]
+WHS9 = WHS9[-1, ]
+WHS9$`2013`<-str_replace_all(WHS9$`2013`, " ", "")
+WHS9_1<-gather(WHS9, `2013`:`1990`, key = "year", value = "income")
+WHS9_1$year<-str_replace_all(WHS9_1$year, " ", "")
+
+
+
+df2<-ldply(str_split(xmart_4$Year, "-"), rbind)
+xmart_5<-data.frame(cbind(xmart_4, df2))
+
+xmart_5$Year<-NULL
+
+
+ll <- list()
+for (index in 1:725){
+    row = xmart_5[index,]
+   X2 <- row["X2"]
+   
+   ll <- rbind(ll, row)
+
+   if (!is.null(X2) && !is.na(X2)){
+     row["X1"] <- row["X2"]
+     print(row)
+     ll <- rbind(ll, row)
+     
+   }
+}
+
+xmart_6<-as.data.frame(ll)
+xmart_6$X2<-NULL
+
+xmart_6<-rename(xmart_6, c("X1"="year"))
+xmart_6$year<-str_replace_all(xmart_6$year, " ", "")
+xmart_6$year<-as.character(xmart_6$year)
+WHS9_1$year<-as.character(WHS9_1$year)
+join_list<-inner_join(xmart_6, WHS9_1, by=c("Country" = "Country", "year"="year"))
+
+
+join_list<-as.data.frame(join_list)
+join_list_1<-join_list[is.na(join_list$income)==0,]
+# join_list_1 is the merged, cleaned, tidy data.
+
+join_list_2<-join_list_1[is.na(join_list_1$Births.attended.by.skilled.health.personnel....)==0,]
+join_list_3<-join_list_1[is.na(join_list_1$maternal_mortality)==0,]
+
+plot(join_list_2$income~join_list_2$Births.attended.by.skilled.health.personnel...., ylab="income", xlab="percentage_attended_births")
+
+plot(join_list_3$income~join_list_3$maternal_mortality, xlab="maternal_mortality", ylab="income")
+
+write_csv(join_list_1,"./join_list_1.csv")
+
+# filter the newest data for the country
+aa <- join_list_1[order(join_list_1$Country, rev(join_list_1$year)), ] #sort by id and reverse of date
+aa<-aa[!duplicated(aa$Country),]
+aa$maternal_mortality<-as.integer(aa$maternal_mortality)
+aa$Country<-tolower(aa$Country)
+aa %>% dplyr::rename(value =maternal_mortality, region=Country) %>%
+  country_choropleth(title = "Country maternal mortality", legend="maternal_mortality")
+
+
+```
+
+
